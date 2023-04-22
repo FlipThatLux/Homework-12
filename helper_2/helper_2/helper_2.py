@@ -49,17 +49,9 @@ class Birthday(Field):
         self.__value = value
 
 
-class Addressbook(UserDict):
-
-    def add_record(self, record):
-        self.data[record.name.value] = record
-
-
 class Record:
-
     def __init__(self, name:Name, *phone_numbers:Phone):
         self.name = name
-        #self.phone = phone_number
         self.phone_numbers = []
         self.birthday = None
         if phone_numbers:
@@ -96,8 +88,88 @@ class Record:
         return f'Birthday coming in {difference.days} days\n'
 
 
+class Addressbook(UserDict):
+    def add_record(self, record):
+        self.data[record.name.value] = record
+
+    def to_dict(self):
+        data = {}
+        for name, record in self.data.items():
+            data[str(name)] = {"phones": [str(phone.value) for phone in record.phone_numbers],
+                               "birthday": str(None) if not record.birthday else [str(record.birthday.value["day"]), str(record.birthday.value["month"]), str(record.birthday.value["year"])]
+                              }
+        return data
+
+    def from_dict(self, data):
+        for name, value in data.items():
+            self.add_record(Record(Name(name), *[Phone(phone) for phone in value["phones"]]))
+            if value["birthday"] != "None":
+                self.data[name].set_birthday(Birthday({"year":int(value["birthday"][2]), "month":int(value["birthday"][1]), "day":int(value["birthday"][0])}))
+
+    def display_contact(self, name):
+        output = f"---------------------------------------------------------\n{name.capitalize()}:\n"
+        for phone in self.data[name].phone_numbers:
+            output += f"{phone.value}\n"
+        if self.data[name].birthday:
+            output += self.data[name].days_to_birthday()
+        return output
+    
+    def iterator(self, items_per_page, *args):
+        start = 0
+        keys = list(self.data.keys())
+        while True:
+            result = ""
+            current_keys = keys[start:start + items_per_page]
+            if not current_keys:
+                break
+            for name in current_keys:
+                result += self.display_contact(name)
+            yield result
+            start += items_per_page
+    
+    def search(self, keyword, *args):
+        result = ""
+        for name in self.data.keys():
+            content = str(self.display_contact(name)).lower()
+            matched = content.find(keyword.lower())
+            #print(content, "\n", matched)
+            if matched != -1:
+                result += self.display_contact(name)
+        if result == "":
+            result = "No matches\n" 
+        return result
+
+    def show_all(self, arg = None, *args):
+        if arg:
+            items_per_page = int(arg)
+            result = "that was the last page \n"
+            pg = self.iterator(items_per_page)
+            for i in pg:
+                print(i)
+                input("Press Enter to see the next page\n>>>")
+        else:
+            result = ""
+            for name in self.data.keys():
+                result += self.display_contact(name)
+        return result
+
+    def load(self):
+        try:
+            with open("data.json", "r") as file:
+                recovered_data = json.load(file)
+            if recovered_data != {}:
+                self.from_dict(recovered_data)
+        except FileNotFoundError:
+            print("data.json was not found")
+
+    def save(self):
+        converted_data = self.to_dict()
+        with open("data.json", "w") as file:
+            json.dump(converted_data, file)
+
 
 addressbook = Addressbook()
+
 
 def command_error(func):
     def inner(*args):
@@ -112,30 +184,6 @@ def command_error(func):
         except ValueError:
             return 'ValueError occured'
     return inner
-
-def display_contact(name):
-    output = f"---------------------------------------------------------\n{name.capitalize()}:\n"
-    for phone in addressbook.data[name].phone_numbers:
-        output += f"{phone.value}\n"
-    if addressbook.data[name].birthday:
-        output += addressbook.data[name].days_to_birthday()
-    return output
-
-def to_dict():
-    data = {}
-    for name, record in addressbook.data.items():
-        data[str(name)] = {"phones": [str(phone.value) for phone in record.phone_numbers],
-                           "birthday": str(None) if not record.birthday else [str(record.birthday.value["day"]), str(record.birthday.value["month"]), str(record.birthday.value["year"])]
-                          }
-    return data
-
-def from_dict(data):
-    for name, value in data.items():
-        addressbook.add_record(Record(Name(name), *[Phone(phone) for phone in value["phones"]]))
-        if value["birthday"] != "None":
-            addressbook.data[name].set_birthday(Birthday({"year":int(value["birthday"][2]), "month":int(value["birthday"][1]), "day":int(value["birthday"][0])}))
-
-
 
 def greeting(*args):
     return "How can I help you?"
@@ -204,48 +252,48 @@ def show_contact(*names):
     result_not = ""
     for name in names:
         if name in addressbook.data.keys():
-            result_found += display_contact(name)
+            result_found += addressbook.display_contact(name)
         else: result_not += f"---------------------------------------------------------\n{name} not found\n"
     return f"{result_found}{result_not}"
 
-def iterator(items_per_page, *args):
-    start = 0
-    keys = list(addressbook.data.keys())
-    while True:
-        result = ""
-        current_keys = keys[start:start + items_per_page]
-        if not current_keys:
-            break
-        for name in current_keys:
-            result = display_contact(name)
-        yield result
-        start += items_per_page
+# def iterator(items_per_page, *args):
+#     start = 0
+#     keys = list(addressbook.data.keys())
+#     while True:
+#         result = ""
+#         current_keys = keys[start:start + items_per_page]
+#         if not current_keys:
+#             break
+#         for name in current_keys:
+#             result += addressbook.display_contact(name)
+#         yield result
+#         start += items_per_page
 
-def show_all(arg = None, *args):
-    if arg:
-        items_per_page = int(arg)
-        result = "that was the last page \n"
-        pg = iterator(items_per_page)
-        for i in pg:
-            print(i)
-            input("Press Enter to see the next page\n>>>")
-    else:
-        result = ""
-        for name in addressbook.data.keys():
-            result += display_contact(name)
-    return result
+# def show_all(arg = None, *args):
+#     if arg:
+#         items_per_page = int(arg)
+#         result = "that was the last page \n"
+#         pg = addressbook.iterator(items_per_page)
+#         for i in pg:
+#             print(i)
+#             input("Press Enter to see the next page\n>>>")
+#     else:
+#         result = ""
+#         for name in addressbook.data.keys():
+#             result += addressbook.display_contact(name)
+#     return result
 
-def search(keyword, *args):
-    result = ""
-    for name in addressbook.data.keys():
-        content = str(display_contact(name)).lower()
-        matched = content.find(keyword.lower())
-        #print(content, "\n", matched)
-        if matched != -1:
-            result += display_contact(name)
-    if result == "":
-        result = "No matches\n" 
-    return result
+# def search(keyword, *args):
+#     result = ""
+#     for name in addressbook.data.keys():
+#         content = str(addressbook.display_contact(name)).lower()
+#         matched = content.find(keyword.lower())
+#         #print(content, "\n", matched)
+#         if matched != -1:
+#             result += addressbook.display_contact(name)
+#     if result == "":
+#         result = "No matches\n" 
+#     return result
 
 @command_error
 def handler(command, args):
@@ -258,23 +306,14 @@ def handler(command, args):
                 # "change phone": change_phone,
                 # "remove phone": remove_phone,
                 "phone": show_contact,
-                "show all": show_all,
-                "search": search 
+                "show all": addressbook.show_all,
+                "search": addressbook.search
                 }
     return functions[command](*args)
 
 def main():
     print("Greetings, user! Phonebook manager online")
-
-    try:
-        with open("data.json", "r") as file:
-            recovered_data = json.load(file)
-        if recovered_data != {}:
-            from_dict(recovered_data)
-    except FileNotFoundError:
-        print("data.json was not found")
-    
-
+    addressbook.load()
     while True:
         user_input = parcer(input('Enter a command: \n>>> '))
         command = user_input[0]
@@ -288,10 +327,6 @@ def main():
         if result == "":
             result = "Seems like your list of contacts is empty. Try adding some" 
         print(result)
-    
-    converted_data = to_dict()
-    #print(converted_data)
-    with open("data.json", "w") as file:
-        json.dump(converted_data, file)
+    addressbook.save()
 
 main()
